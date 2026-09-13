@@ -34,7 +34,8 @@ in
   services.displayManager.gdm.wayland = true;
   services.displayManager.gdm.autoSuspend = false;
 
-  # Keep automatic suspend disabled during hardware validation.
+  # Suspend remains available for an explicit test, but the live desktop does
+  # not auto-suspend while diagnostics are running.
   systemd.sleep.extraConfig = ''
     AllowSuspend=yes
     AllowHibernation=no
