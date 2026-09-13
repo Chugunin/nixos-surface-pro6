@@ -13,9 +13,9 @@ in
   services.iptsd.enable = true;
   hardware.sensor.iio.enable = true;
 
-  # Surface-specific Wacom database includes an explicit Surface Pro 6 entry.
+  # Enable Wacom input support. libwacom-surface is also present in the live image
+  # for Surface-specific diagnostics; NixOS 26.05 has no services.xserver.wacom.package option.
   services.xserver.wacom.enable = true;
-  services.xserver.wacom.package = pkgs.libwacom-surface;
 
   hardware.bluetooth = {
     enable = true;
