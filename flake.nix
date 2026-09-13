@@ -22,7 +22,9 @@
       };
     in {
       nixosConfigurations.surface-pro6-live = live;
-      packages.${system}.surface-pro6-iso = live.config.system.build.isoImage;
-      packages.${system}.default = self.packages.${system}.surface-pro6-iso;
+      packages.${system} = {
+        surface-pro6-iso = live.config.system.build.isoImage;
+        default = live.config.system.build.isoImage;
+      };
     };
 }
