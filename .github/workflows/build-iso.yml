@@ -1,0 +1,69 @@
+name: Build Surface Pro 6 Live ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'iso.nix'
+      - 'scripts/**'
+      - '.github/workflows/build-iso.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo docker system prune -af || true
+          df -h
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v20
+
+      - name: Enable Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
+      - name: Lock inputs
+        run: nix flake lock
+
+      - name: Evaluate configuration
+        run: nix eval .#nixosConfigurations.surface-pro6-live.config.system.build.isoImage.drvPath
+
+      - name: Build ISO
+        run: nix build .#surface-pro6-iso -L --print-build-logs
+
+      - name: Collect ISO and checksums
+        run: |
+          mkdir -p dist
+          cp -L result/iso/*.iso dist/
+          cd dist
+          sha256sum *.iso > SHA256SUMS
+          ls -lh
+          df -h
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nixos-surface-pro6-live
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Publish rolling test release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete live-latest --cleanup-tag -y || true
+          gh release create live-latest dist/* --title "Surface Pro 6 Live - latest" --notes "Automated test build from commit $GITHUB_SHA. Boot as a live ISO; do not install during hardware validation."
