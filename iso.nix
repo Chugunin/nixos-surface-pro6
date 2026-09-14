@@ -2,6 +2,22 @@
 
 let
   surfaceReport = pkgs.writeShellScriptBin "surface-report" (builtins.readFile ./scripts/surface-report.sh);
+  bootDiagnostics = pkgs.writeShellScript "surface-boot-diagnostics" ''
+    set +e
+    OUT=/tmp/surface-boot-diagnostics
+    mkdir -p "$OUT"
+    date -Is > "$OUT/timestamp.txt"
+    cat /proc/cmdline > "$OUT/cmdline.txt" 2>&1
+    ${pkgs.systemd}/bin/systemctl --failed --no-pager > "$OUT/failed-units.txt" 2>&1
+    ${pkgs.systemd}/bin/systemctl list-jobs --no-pager > "$OUT/jobs.txt" 2>&1
+    ${pkgs.systemd}/bin/systemctl status systemd-modules-load.service --no-pager -l > "$OUT/modules-load-status.txt" 2>&1
+    ${pkgs.systemd}/bin/journalctl -b --no-pager > "$OUT/journal.txt" 2>&1
+    ${pkgs.systemd}/bin/journalctl -b -k --no-pager > "$OUT/kernel-journal.txt" 2>&1
+    ${pkgs.kmod}/bin/lsmod > "$OUT/lsmod.txt" 2>&1
+    ${pkgs.util-linux}/bin/lsblk -f > "$OUT/lsblk.txt" 2>&1
+    ${pkgs.util-linux}/bin/findmnt > "$OUT/findmnt.txt" 2>&1
+    ${pkgs.coreutils}/bin/sync
+  '';
 in
 {
   networking.hostName = "surface-pro6-live";
@@ -12,6 +28,11 @@ in
   hardware.microsoft-surface.kernelVersion = "longterm";
   services.iptsd.enable = true;
   hardware.sensor.iio.enable = true;
+
+  # The generic graphical installer image may request Hyper-V guest storage/balloon
+  # modules. They fail on physical SP6 hardware and made systemd-modules-load fail
+  # during the first hardware boot. They are not required on the target machine.
+  boot.blacklistedKernelModules = [ "hv_storvsc" "hv_balloon" ];
 
   # Enable Wacom input support. libwacom-surface is also present in the live image
   # for Surface-specific diagnostics; NixOS 26.05 has no services.xserver.wacom.package option.
@@ -39,6 +60,21 @@ in
     AllowHibernation = "no";
     AllowHybridSleep = "no";
     AllowSuspendThenHibernate = "no";
+  };
+
+  # Automatically capture boot state without requiring commands in an emergency shell.
+  # /tmp is intentionally used as the reliable baseline; surface-report remains available
+  # for interactive hardware validation once the graphical session starts.
+  systemd.services.surface-boot-diagnostics = {
+    description = "Capture Surface Pro 6 live boot diagnostics";
+    wantedBy = [ "multi-user.target" "emergency.target" ];
+    after = [ "systemd-modules-load.service" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = bootDiagnostics;
+      TimeoutStartSec = 60;
+    };
   };
 
   environment.systemPackages = with pkgs; [
