@@ -60,10 +60,27 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+      - name: Prepare GitHub Release assets
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p release-dist
+          ISO="$(find dist -maxdepth 1 -type f -name '*.iso' -print -quit)"
+          ISO_NAME="$(basename "$ISO")"
+          cp dist/SHA256SUMS release-dist/
+          split -b 1900M -d -a 2 "$ISO" "release-dist/${ISO_NAME}.part-"
+          (cd release-dist && sha256sum "${ISO_NAME}.part-"* > PARTS-SHA256SUMS)
+          printf '%s\n' \
+            'GitHub limits each Release asset to less than 2 GiB, so the ISO is split into numbered parts.' \
+            'Linux/macOS: cat *.part-* > nixos-surface-pro6-live.iso' \
+            'Windows CMD: copy /b <part-00>+<part-01> nixos-surface-pro6-live.iso' \
+            'After reassembly, verify the ISO against SHA256SUMS.' \
+            > release-dist/REASSEMBLE.txt
+          ls -lh release-dist
+
       - name: Publish rolling test release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete live-latest --cleanup-tag -y || true
-          gh release create live-latest dist/* --title "Surface Pro 6 Live - latest" --notes "Automated test build from commit $GITHUB_SHA. Boot as a live ISO; do not install during hardware validation."
+          gh release create live-latest release-dist/* --title "Surface Pro 6 Live - latest" --notes "Automated test build from commit $GITHUB_SHA. The complete ISO is also retained as a workflow artifact for 7 days. GitHub Release assets are split below the 2 GiB per-file limit; see REASSEMBLE.txt. Boot as a live ISO; do not install during hardware validation."
