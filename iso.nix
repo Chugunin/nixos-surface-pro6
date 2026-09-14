@@ -30,18 +30,16 @@ in
     pulse.enable = true;
   };
 
-  # GNOME/Wayland is supplied by the graphical GNOME installation image.
-  services.displayManager.gdm.wayland = true;
+  # GNOME 50 is Wayland-only here; keep automatic suspend disabled during validation.
   services.displayManager.gdm.autoSuspend = false;
 
-  # Suspend remains available for an explicit test, but the live desktop does
-  # not auto-suspend while diagnostics are running.
-  systemd.sleep.extraConfig = ''
-    AllowSuspend=yes
-    AllowHibernation=no
-    AllowHybridSleep=no
-    AllowSuspendThenHibernate=no
-  '';
+  # Suspend remains available for an explicit test, but hibernation variants are disabled.
+  systemd.sleep.settings.Sleep = {
+    AllowSuspend = "yes";
+    AllowHibernation = "no";
+    AllowHybridSleep = "no";
+    AllowSuspendThenHibernate = "no";
+  };
 
   environment.systemPackages = with pkgs; [
     surfaceReport
